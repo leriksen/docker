@@ -1,3 +1,8 @@
+parameters:
+  - name: ref
+    type: string
+    default: main
+
 trigger: none
 
 variables:
@@ -5,64 +10,16 @@ variables:
   - group: dockerhub
   - group: acr
 
-stages:
-  - stage: build
-    displayName: ACR Build and Push
-    jobs:
-      - job: acr_docker_build
-        displayName: Docker Build and Push
-        workspace:
-          clean: all
-        steps:
-          - checkout: self
-          - task: AzureCLI@2
-            displayName: Login to ACR
-            env:
-              DOCKER_REGISTRY: $(acr_registry)
-            inputs:
-              azureSubscription: azure
-              addSpnToEnvironment: true
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                echo "${servicePrincipalKey}" | docker login ${DOCKER_REGISTRY} --username "${servicePrincipalId}" --password-stdin
-          - task: AzureCLI@2
-            displayName: Login to DockerHub
-            env:
-              DOCKER_REGISTRY: $(dockerhub_registry)
-              DOCKER_REGISTRY_USER: $(dockerhub_username)
-              DOCKER_REGISTRY_PASS: $(dockerhub_password)
-            inputs:
-              azureSubscription: azure
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                echo "${DOCKER_REGISTRY_PASS}" | docker login ${DOCKER_REGISTRY} --username "${DOCKER_REGISTRY_USER}" --password-stdin
-          - task: AzureCLI@2
-            displayName: Build
-            env:
-              ACR_DOCKER_REGISTRY: $(acr_registry)
-              DOCKERHUB_DOCKER_REGISTRY: $(dockerhub_registry)
-            inputs:
-              azureSubscription: azure
-              workingDirectory: application
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                docker build .                                                   \
-                  -t ${ACR_DOCKER_REGISTRY}/$(repository):$(Build.BuildId)       \
-                  -t ${DOCKERHUB_DOCKER_REGISTRY}/$(repository):$(Build.BuildId)
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      endpoint: docker/templates
+      ref: ${{ parameters.ref }}
 
-          - task: AzureCLI@2
-            displayName: Push
-            env:
-              ACR_DOCKER_REGISTRY: $(acr_registry)
-              DOCKERHUB_DOCKER_REGISTRY: $(dockerhub_registry)
-            inputs:
-              azureSubscription: azure
-              workingDirectory: application
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                docker push ${ACR_DOCKER_REGISTRY}/$(repository):$(Build.BuildId)
-                docker push ${DOCKERHUB_DOCKER_REGISTRY}/$(repository):$(Build.BuildId)
+extends:
+  template: build.yml@templates
+  parameters:
+    agentPool:
+      vmImage: ubuntu-latest
+    serviceConnection: azure
