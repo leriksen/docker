@@ -1,5 +1,10 @@
 trigger: none
 
+variables:
+  - group: docker
+  - group: dockerhub
+  - group: acr
+
 stages:
   - stage: build
     displayName: ACR Build and Push
@@ -10,35 +15,54 @@ stages:
           clean: all
         steps:
           - checkout: self
-          - task:  Docker@2
+          - task: AzureCLI@2
             displayName: Login to ACR
+            env:
+              DOCKER_REGISTRY: $(acr_registry)
             inputs:
-              command: login
-              containerRegistry: ACR
-          - task: Docker@2
-            displayName: Build and Push
+              azureSubscription: azure
+              addSpnToEnvironment: true
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "${servicePrincipalKey}" | docker login ${DOCKER_REGISTRY} --username "${servicePrincipalId}" --password-stdin
+          - task: AzureCLI@2
+            displayName: Login to DockerHub
+            env:
+              DOCKER_REGISTRY: $(dockerhub_registry)
+              DOCKER_REGISTRY_USER: $(dockerhub_username)
+              DOCKER_REGISTRY_PASS: $(dockerhub_password)
             inputs:
-              command: buildAndPush
-              repository: leriksen/hreporter
-              tags: |
-                $(Build.BuildId)
-                latest
-      - job: dockerhub_docker_build
-        displayName: DockerHub Build and Push
-        workspace:
-          clean: all
-        steps:
-          - checkout: self
-          - task:  Docker@2
-            displayName: Login to Dockerhub
+              azureSubscription: azure
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "${DOCKER_REGISTRY_PASS}" | docker login ${DOCKER_REGISTRY} --username "${DOCKER_REGISTRY_USER}" --password-stdin
+          - task: AzureCLI@2
+            displayName: Build
+            env:
+              ACR_DOCKER_REGISTRY: $(acr_registry)
+              DOCKERHUB_DOCKER_REGISTRY: $(dockerhub_registry)
             inputs:
-              command: login
-              containerRegistry: DockerHub
-          - task: Docker@2
-            displayName: Build and Push
+              azureSubscription: azure
+              workingDirectory: application
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                docker build .                                                   \
+                  -t ${ACR_DOCKER_REGISTRY}/$(repository):$(Build.BuildId)       \
+                  -t ${DOCKERHUB_DOCKER_REGISTRY}/$(repository):$(Build.BuildId)
+
+          - task: AzureCLI@2
+            displayName: Push
+            env:
+              ACR_DOCKER_REGISTRY: $(acr_registry)
+              DOCKERHUB_DOCKER_REGISTRY: $(dockerhub_registry)
             inputs:
-              command: buildAndPush
-              repository: leriksen/hreporter
-              tags: |
-                $(Build.BuildId)
-                latest
+              azureSubscription: azure
+              workingDirectory: application
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                docker push ${ACR_DOCKER_REGISTRY}/$(repository):$(Build.BuildId)
+                docker push ${DOCKERHUB_DOCKER_REGISTRY}/$(repository):$(Build.BuildId)
