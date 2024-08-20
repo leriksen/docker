@@ -3,7 +3,7 @@ trigger: none
 
 stages:
   - stage: build
-    displayName: Docker Build and Push
+    displayName: ACR Build and Push
     jobs:
       - job: acr_docker_build
         displayName: Docker Build and Push
@@ -25,7 +25,7 @@ stages:
                 $(Build.BuildId)
                 latest
       - job: dockerhub_docker_build
-        displayName: Docker Build and Push
+        displayName: DockerHub Build and Push
         workspace:
           clean: all
         steps:
