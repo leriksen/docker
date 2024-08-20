@@ -19,9 +19,13 @@ provider "azurerm" {
   features {}
 }
 
+variable "pat" {
+  type = string
+}
+
 provider "azuredevops" {
   org_service_url       = "https://dev.azure.com/leiferiksenau"
-  personal_access_token = "n5c5jnn34zgtmxfaxe2ma7jnwmj5vohd3lrhkwogtkkkrturbnsq"
+  personal_access_token = var.pat
 }
 
 locals {
